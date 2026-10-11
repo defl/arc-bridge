@@ -429,7 +429,10 @@ void ARCBridgeComponent::parse_frame(const std::string &frame) {
   }
   else if (!std::isnan(dbm)) {
     if (lq_sensor)     lq_sensor->publish_state(dbm);
-    if (status_sensor) status_sensor->publish_state("Online");
+    // Only a position reply proves the motor is healthy. A pVc reply also
+    // carries RSSI, and letting it set "Online" made the status flap
+    // "Error Eor" <-> "Online" on every poll.
+    if (status_sensor && pos >= 0) status_sensor->publish_state("Online");
   }
 
   for (auto *cv : covers_) {
