@@ -357,6 +357,16 @@ void ARCBridgeComponent::parse_frame(const std::string &frame) {
   bool enp = (rest.find("Enp") != std::string::npos);
   bool enl = (rest.find("Enl") != std::string::npos);
 
+  // Any reply whose body starts with 'E' is an error and carries no position.
+  // Without this, "!3VSEor,R9E;" had its position read from the 'r' inside the
+  // error code itself: atoi("") == 0 -> published as fully open every poll.
+  bool err = !rest.empty() && rest[0] == 'E';
+  std::string err_code;
+  if (err) {
+    size_t comma = rest.find(',');
+    err_code = rest.substr(0, comma == std::string::npos ? rest.size() : comma);
+  }
+
   // NEW: handle pVc replies: look for "pVc" followed by digits
   {
     size_t pvc_pos = rest.find("pVc");
@@ -375,7 +385,7 @@ void ARCBridgeComponent::parse_frame(const std::string &frame) {
   }
 
   size_t rpos = rest.find('r');
-  if (rpos != std::string::npos)
+  if (!err && rpos != std::string::npos)
     pos = std::atoi(rest.c_str() + rpos + 1);
 
   size_t Rpos = rest.find('R');
@@ -410,6 +420,12 @@ void ARCBridgeComponent::parse_frame(const std::string &frame) {
     if (status_sensor) status_sensor->publish_state("unavailable");
     if (lq_sensor)     lq_sensor->publish_state(NAN);
     ESP_LOGW(TAG, "[%s] Not paired", id.c_str());
+  }
+  else if (err) {
+    // The link is fine (the RSSI is real); the motor reported an error code.
+    if (lq_sensor && !std::isnan(dbm)) lq_sensor->publish_state(dbm);
+    if (status_sensor) status_sensor->publish_state("Error " + err_code);
+    ESP_LOGW(TAG, "[%s] Error reply %s - position not updated", id.c_str(), err_code.c_str());
   }
   else if (!std::isnan(dbm)) {
     if (lq_sensor)     lq_sensor->publish_state(dbm);

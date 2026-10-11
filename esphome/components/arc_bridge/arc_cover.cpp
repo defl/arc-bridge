@@ -115,6 +115,13 @@ void ARCCover::control(const cover::CoverCall &call) {
       this->bridge_->send_open(this->blind_id_);
     else
       this->bridge_->send_move(this->blind_id_, arc_percent);
+
+    // Assume the commanded position. A motor that answers position polls with
+    // an error code (e.g. "Eor") never reports where it went, so without this
+    // the entity stays at its last position while the blind moves. A real
+    // position reply overwrites this on the next poll.
+    this->position = p;
+    this->publish_state();
   }
 }
 
